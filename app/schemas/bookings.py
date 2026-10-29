@@ -1,12 +1,26 @@
 from datetime import datetime, timezone
 
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict, EmailStr, field_serializer, field_validator
 
 
 class BookingCreate(BaseModel):
     slot_id: str
     name: str
-    email: str
+    email: EmailStr
+
+    @field_validator("slot_id", "name", "email", mode="before")
+    @classmethod
+    def trim_required_text(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @field_validator("slot_id", "name", "email")
+    @classmethod
+    def reject_empty_text(cls, value: str) -> str:
+        if not value:
+            raise ValueError("must not be empty")
+        return value
 
 
 class BookingResponse(BaseModel):

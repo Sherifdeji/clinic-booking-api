@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Booking, Slot
 from app.db.session import get_db
+from app.api.auth import require_api_key
 from app.schemas.bookings import BookingCreate, BookingResponse
 from app.schemas.slots import ResetRequest, SlotResponse, SlotsResponse
 from app.services.bookings import (
@@ -15,7 +16,7 @@ from app.services.bookings import (
     reset_slots,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_api_key)])
 DbSession = Annotated[Session, Depends(get_db)]
 
 

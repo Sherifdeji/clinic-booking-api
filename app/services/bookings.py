@@ -41,6 +41,9 @@ def create_booking(db: Session, payload: BookingCreate) -> Booking:
     if slot is None:
         raise DomainError(404, "slot not found")
 
+    if slot.start_time <= datetime.now(timezone.utc):
+        raise DomainError(400, "slot has already started")
+
     already_booked = db.scalar(
         select(Booking.id).where(
             Booking.slot_id == slot.id,

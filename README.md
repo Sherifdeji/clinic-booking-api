@@ -1,8 +1,8 @@
 # Koya Clinic Booking API
 
-This repository contains the Level 1 implementation of the Koya clinic booking
-assessment. It currently implements only the basic reset, slot listing, booking,
-and booking retrieval endpoints.
+This repository contains the Level 2 implementation of the Koya clinic booking
+assessment. It implements reset, slot listing, booking, booking retrieval,
+API-key authentication, and Level 2 booking validation.
 
 ## Local setup
 
@@ -13,6 +13,7 @@ connection:
 createdb koya_clinic
 cp .env.example .env
 export DATABASE_URL=postgresql+psycopg://postgres@localhost:5432/koya_clinic
+export API_KEY=choose-a-local-api-key
 python3 -m pip install -e '.[test]'
 alembic upgrade head
 uvicorn app.main:app --reload
@@ -25,21 +26,25 @@ The application does not create tables at startup; Alembic owns schema changes.
 ```bash
 curl -X POST http://127.0.0.1:8000/reset \
   -H 'Content-Type: application/json' \
+  -H 'X-API-Key: choose-a-local-api-key' \
   -d '{"slots":[{"id":"s1","provider":"Dr Ade","start":"2099-12-10T09:00:00Z","end":"2099-12-10T09:30:00Z"}]}'
 
-curl http://127.0.0.1:8000/slots
+curl http://127.0.0.1:8000/slots \
+  -H 'X-API-Key: choose-a-local-api-key'
 
 curl -X POST http://127.0.0.1:8000/bookings \
   -H 'Content-Type: application/json' \
+  -H 'X-API-Key: choose-a-local-api-key' \
   -d '{"slot_id":"s1","name":"Ada Obi","email":"ada@example.com"}'
 
-curl http://127.0.0.1:8000/bookings/<booking-id>
+curl http://127.0.0.1:8000/bookings/<booking-id> \
+  -H 'X-API-Key: choose-a-local-api-key'
 ```
 
 The reset response is `{"message":"reset successful"}` because the supplied
-contract specifies only HTTP 200 and no success body. Level 1 performs a basic
-availability check; database-level race protection is intentionally deferred
-to Level 3.
+contract specifies only HTTP 200 and no success body. All contract endpoints
+require `X-API-Key`. Level 2 performs a basic availability check; database-level
+race protection is intentionally deferred to Level 3.
 
 Run the tests with:
 

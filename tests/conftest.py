@@ -1,4 +1,3 @@
-import os
 import subprocess
 
 import pytest
@@ -13,8 +12,9 @@ def migrate_database() -> None:
 
 
 @pytest.fixture
-def client() -> TestClient:
-    with TestClient(app) as test_client:
+def client(monkeypatch) -> TestClient:
+    monkeypatch.setenv("API_KEY", "test-key")
+    with TestClient(app, headers={"X-API-Key": "test-key"}) as test_client:
         yield test_client
 
 

@@ -55,6 +55,31 @@ def test_empty_slots_returns_empty_array(client):
     assert client.get("/slots").json() == {"slots": []}
 
 
+def test_missing_or_incorrect_api_key_is_rejected(client):
+    client.headers.pop("X-API-Key")
+    response = client.get("/slots")
+    assert response.status_code == 401
+    assert response.json() == {"error": "invalid or missing API key"}
+
+    response = client.get("/slots", headers={"X-API-Key": "wrong-key"})
+    assert response.status_code == 401
+    assert response.json() == {"error": "invalid or missing API key"}
+
+
+def test_unauthorized_reset_does_not_change_slots(client, future_slots):
+    reset(client, future_slots)
+    response = client.post(
+        "/reset",
+        headers={"X-API-Key": "wrong-key"},
+        json={"slots": []},
+    )
+    assert response.status_code == 401
+    assert [slot["id"] for slot in client.get("/slots").json()["slots"]] == [
+        "s2",
+        "s1",
+    ]
+
+
 def test_reset_deletes_existing_bookings(client):
     slots = [
         {
