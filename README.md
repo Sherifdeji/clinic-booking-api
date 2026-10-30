@@ -57,8 +57,7 @@ curl -X DELETE http://127.0.0.1:8000/bookings/<booking-id> \
 ```
 
 The cancellation response contains the original booking with
-`"status":"cancelled"`. Frontend integration and deployment are intentionally
-not implemented yet.
+`"status":"cancelled"`.
 
 An idempotent booking can be submitted with:
 
@@ -88,6 +87,41 @@ attempt returns HTTP 429 with a calculated `Retry-After` header:
 Rate-limit attempts are stored in PostgreSQL and coordinated with a
 transaction-scoped advisory lock per email, so the limit is shared across
 application workers and survives restarts.
+
+## Local frontend
+
+The application also serves a small dependency-free HTML, CSS, and vanilla
+JavaScript frontend at:
+
+```text
+http://127.0.0.1:8000/
+```
+
+The browser uses the same-origin `/ui-api/slots` and `/ui-api/bookings`
+endpoints. These are backend-for-frontend (BFF) routes: they call the existing
+booking services inside FastAPI, so row locking, idempotency, and persistent
+rate limiting are still applied. The browser never receives or sends the
+private `X-API-Key`; the externally accessible contract routes remain protected
+by that header.
+
+The frontend creates one `Idempotency-Key` for each booking request and keeps it
+when a request is retried with the same form values. Changing the slot, name,
+or email creates a new key. A conflict refreshes the slot list so the patient
+can choose another available appointment.
+
+To test the frontend manually:
+
+1. Start PostgreSQL, apply migrations, export `DATABASE_URL` and `API_KEY`, and
+   start Uvicorn using the commands above.
+2. Reset some future slots using the authenticated `/reset` curl command.
+3. Open `http://127.0.0.1:8000/` in a browser.
+4. Choose a provider or “All providers”, select a slot, and submit patient
+   details.
+5. In browser Developer Tools, inspect the Network tab. Requests should go to
+   `/ui-api/*`; no request should contain `X-API-Key`.
+6. Submit the same request again after a temporary network failure. The
+   frontend reuses its idempotency key, allowing the backend to replay the
+   result rather than creating a duplicate booking.
 
 Run the tests with:
 

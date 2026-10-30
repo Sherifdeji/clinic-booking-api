@@ -75,9 +75,8 @@ def create_booking(db: Session, payload: BookingCreate) -> Booking:
             db.add(booking)
     except IntegrityError as exc:
         db.rollback()
-        if getattr(exc.orig, "diag", None) is not None and (
-            exc.orig.diag.constraint_name == "uq_bookings_one_confirmed_per_slot"
-        ):
+        diag = getattr(exc.orig, "diag", None)
+        if getattr(diag, "constraint_name", None) == "uq_bookings_one_confirmed_per_slot":
             raise DomainError(409, "slot already booked") from exc
         raise
 
@@ -171,13 +170,16 @@ def create_idempotent_booking(
                 .where(IdempotencyRecord.key == idempotency_key)
                 .with_for_update()
             )
+            if record is None:
+                raise DomainError(500, "idempotency record unavailable")
             record.response_status = status_code
             record.response_body = response_body
             return status_code, response_body
     except IntegrityError as exc:
         db.rollback()
-        if getattr(exc.orig, "diag", None) is not None and (
-            exc.orig.diag.constraint_name == "uq_bookings_one_confirmed_per_slot"
+        diag = getattr(exc.orig, "diag", None)
+        if getattr(diag, "constraint_name", None) == (
+            "uq_bookings_one_confirmed_per_slot"
         ):
             raise DomainError(409, "slot already booked") from exc
         raise
@@ -234,7 +236,7 @@ def list_bookings(
 
     bookings = db.scalars(statement).all()
     has_next_page = len(bookings) > limit
-    page = bookings[:limit]
+    page = list(bookings[:limit])
     next_cursor = (
         encode_cursor(page[-1].created_at, page[-1].id)
         if has_next_page

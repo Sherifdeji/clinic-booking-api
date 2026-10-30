@@ -1,12 +1,22 @@
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
+from app.api.ui import router as ui_router
 from app.services.bookings import DomainError
 
 app = FastAPI(title="Clinic booking API", version="1.0")
 app.include_router(router)
+app.include_router(ui_router)
+app.mount(
+    "/",
+    StaticFiles(directory=Path(__file__).resolve().parent.parent / "frontend", html=True),
+    name="frontend",
+)
 
 
 @app.exception_handler(HTTPException)
