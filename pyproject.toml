@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "koya-clinic-api"
 version = "0.1.0"
-description = "Level 2 clinic booking API for the Koya assessment"
+description = "Level 5 clinic booking API for the Koya assessment"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.13,<2",

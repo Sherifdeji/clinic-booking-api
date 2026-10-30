@@ -11,6 +11,8 @@ class Base(DeclarativeBase):
 class Slot(Base):
     __tablename__ = "slots"
 
+    __table_args__ = (Index("ix_slots_start", "start"),)
+
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     provider: Mapped[str] = mapped_column(String(200), nullable=False)
     start_time: Mapped[datetime] = mapped_column(
@@ -55,6 +57,7 @@ class IdempotencyRecord(Base):
 
     key: Mapped[str] = mapped_column(String(255), primary_key=True)
     request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    fingerprint_version: Mapped[int] = mapped_column(server_default="1", nullable=False)
     response_status: Mapped[int] = mapped_column(nullable=False)
     response_body: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

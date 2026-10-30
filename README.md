@@ -8,12 +8,13 @@ booking-attempt rate limiting.
 
 ## Local setup
 
-Python 3.12+ and PostgreSQL are required. Create a database and configure the
-connection:
+Python 3.12+ and PostgreSQL are required. Run from the repository root. For a
+**new local installation**, create a database and configure the connection.
+Do not overwrite an existing `.env`; it is not loaded automatically by Alembic.
 
 ```bash
 createdb koya_clinic
-cp .env.example .env
+# Copy .env.example to .env only if .env does not already exist.
 export DATABASE_URL=postgresql+psycopg://postgres@localhost:5432/koya_clinic
 export API_KEY=choose-a-local-api-key
 python3 -m pip install -e '.[test]'
@@ -22,6 +23,23 @@ uvicorn app.main:app --reload
 ```
 
 The application does not create tables at startup; Alembic owns schema changes.
+For an existing installation, stop old workers, apply `alembic upgrade head`,
+then start the updated application. Migration `20261030_0005` preserves existing
+idempotency keys and their saved responses. Do not mix old and new workers during
+this update: reset coordination requires every writer to use the new lock protocol.
+
+If you store settings in `.env` instead of exporting them individually, load them
+into the shell before running Alembic or Uvicorn:
+
+```bash
+set -a
+. ./.env
+set +a
+```
+
+**Warning:** `/reset` deletes all bookings and replaces all slots. It also clears
+idempotency and rate-limit records. Use the examples below only on a disposable
+local database, never on an installation with records you need to retain.
 
 ## Level 1 endpoints
 
@@ -70,7 +88,10 @@ curl -X POST http://127.0.0.1:8000/bookings \
 ```
 
 Repeating the request with the same key and body replays the original response.
-Reusing the key with a different body returns HTTP 422. Booking history is
+Reusing the key with a different body returns HTTP 422. New keys fingerprint the
+submitted JSON values, including additional properties; object key order does not
+matter. Existing pre-audit keys retain their original normalized-field fingerprint
+semantics so they remain replayable. Booking history is
 available at `/bookings?email=ada@example.com&limit=10`; pass its opaque
 `next_cursor` value as `cursor` for the next page.
 
@@ -104,10 +125,21 @@ rate limiting are still applied. The browser never receives or sends the
 private `X-API-Key`; the externally accessible contract routes remain protected
 by that header.
 
-The frontend creates one `Idempotency-Key` for each booking request and keeps it
-when a request is retried with the same form values. Changing the slot, name,
-or email creates a new key. A conflict refreshes the slot list so the patient
-can choose another available appointment.
+The frontend groups real appointment times by local date, labels the time zone,
+filters providers, and disables booked or past appointments. Desktop uses a
+browse/form composition; mobile uses a single-column flow. Confirmation uses the
+actual returned booking and the appointment captured when submitting.
+
+The frontend keeps one opaque `Idempotency-Key` per submitted payload. Session
+storage contains keys and SHA-256 fingerprints, not patient names, emails, or
+request bodies. The browser must support Web Crypto and session storage; use
+HTTPS outside localhost. A lost-response retry with the same details reuses the
+key. Controls are frozen during submission, conflicts refresh availability, and
+HTTP 429 displays a `Retry-After` countdown.
+
+The BFF intentionally exposes only public availability and booking creation.
+It does **not** expose patient history or cancellation without patient ownership
+verification. These remain authenticated contract API operations.
 
 To test the frontend manually:
 
@@ -123,8 +155,25 @@ To test the frontend manually:
    frontend reuses its idempotency key, allowing the backend to replay the
    result rather than creating a duplicate booking.
 
-Run the tests with:
+## Verification
+
+Tests use **real PostgreSQL**, run migrations, and destructively reset their target.
+They now refuse to run without explicit `TEST_DATABASE_URL`, a database name ending
+`_test`, and a target different from an already configured `DATABASE_URL`.
+Use a newly created, dedicated database and run the suite serially:
 
 ```bash
-pytest
+createdb koya_clinic_audit_test
+TEST_DATABASE_URL='postgresql+psycopg://postgres@localhost:5432/koya_clinic_audit_test' python3 -m pytest
 ```
+
+Never point this at development or production data. Do not run another application
+or test suite against the same test database at the same time. The name guard is
+not a substitute for genuine database isolation.
+
+Optional real-Chrome checks are in `tests/browser_flow.cjs`; the bounded runner
+`scripts/verify_browser.py` migrates and seeds a **separate disposable test DB**,
+starts Uvicorn temporarily, runs the browser checks, captures screenshots, and
+stops the server. Playwright is verification tooling only, not an app dependency.
+See [the audit report](docs/AUDIT.md) for commands, the contract matrix, actual
+results, migration details, and remaining deployment-review requirements.

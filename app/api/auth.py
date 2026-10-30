@@ -15,7 +15,9 @@ def require_api_key(
             detail="API key is not configured",
         )
 
-    if api_key is None or not secrets.compare_digest(api_key, expected_api_key):
+    if api_key is None or not secrets.compare_digest(
+        api_key.encode(), expected_api_key.encode()
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid or missing API key",

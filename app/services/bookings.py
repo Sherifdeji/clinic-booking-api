@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Booking, IdempotencyRecord, RateLimitAttempt, Slot
 from app.schemas.bookings import BookingCreate
 from app.schemas.slots import SlotInput
+from app.services.coordination import lock_booking_state
 
 
 class DomainError(Exception):
@@ -24,6 +25,7 @@ class DomainError(Exception):
 def reset_slots(db: Session, slots: list[SlotInput]) -> None:
     try:
         with db.begin():
+            lock_booking_state(db, exclusive=True)
             db.execute(delete(Booking))
             db.execute(delete(IdempotencyRecord))
             db.execute(delete(RateLimitAttempt))
@@ -46,6 +48,7 @@ def reset_slots(db: Session, slots: list[SlotInput]) -> None:
 def create_booking(db: Session, payload: BookingCreate) -> Booking:
     try:
         with db.begin():
+            lock_booking_state(db)
             slot = db.scalar(
                 select(Slot).where(Slot.id == payload.slot_id).with_for_update()
             )
@@ -102,14 +105,18 @@ def _encoded_booking(booking: Booking) -> dict:
 
 
 def create_idempotent_booking(
-    db: Session, payload: BookingCreate, idempotency_key: str
+    db: Session, payload: BookingCreate, idempotency_key: str,
+    body_fingerprint: str | None = None,
 ) -> tuple[int, dict]:
-    fingerprint = request_fingerprint(payload)
+    legacy_fingerprint = request_fingerprint(payload)
+    fingerprint = body_fingerprint or legacy_fingerprint
     try:
         with db.begin():
+            lock_booking_state(db)
             claim = insert(IdempotencyRecord).values(
                 key=idempotency_key,
                 request_fingerprint=fingerprint,
+                fingerprint_version=2 if body_fingerprint else 1,
                 response_status=0,
                 response_body={},
                 created_at=datetime.now(timezone.utc),
@@ -126,7 +133,8 @@ def create_idempotent_booking(
                 )
                 if record is None:
                     raise DomainError(500, "idempotency record unavailable")
-                if record.request_fingerprint != fingerprint:
+                expected = legacy_fingerprint if record.fingerprint_version == 1 else fingerprint
+                if record.request_fingerprint != expected:
                     raise DomainError(
                         422, "idempotency key reused with a different request"
                     )
@@ -195,11 +203,14 @@ def encode_cursor(created_at: datetime, booking_id: str) -> str:
 
 def decode_cursor(cursor: str) -> tuple[datetime, str]:
     try:
+        if not cursor or len(cursor) > 1024:
+            raise ValueError
         padded_cursor = cursor + "=" * (-len(cursor) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(padded_cursor).decode())
+        payload = json.loads(base64.b64decode(padded_cursor, altchars=b"-_", validate=True).decode())
         created_at = datetime.fromisoformat(payload["created_at"])
         booking_id = payload["id"]
-        if created_at.tzinfo is None or not isinstance(booking_id, str) or not booking_id:
+        if (created_at.tzinfo is None or not isinstance(booking_id, str)
+                        or not booking_id or "\u0000" in booking_id):
             raise ValueError
         return created_at.astimezone(timezone.utc), booking_id
     except (
@@ -209,6 +220,7 @@ def decode_cursor(cursor: str) -> tuple[datetime, str]:
         UnicodeDecodeError,
         json.JSONDecodeError,
         binascii.Error,
+        OverflowError,
     ):
         raise DomainError(400, "invalid cursor")
 
@@ -247,6 +259,7 @@ def list_bookings(
 
 def cancel_booking(db: Session, booking_id: str) -> Booking:
     with db.begin():
+        lock_booking_state(db)
         existing_booking = db.scalar(
             select(Booking).where(Booking.id == booking_id)
         )

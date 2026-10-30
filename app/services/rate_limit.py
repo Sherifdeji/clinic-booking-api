@@ -8,6 +8,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.models import RateLimitAttempt
 from app.db.session import SessionLocal
+from app.schemas.bookings import normalize_email_identity
+from app.services.coordination import lock_booking_state
 
 RATE_LIMIT = 5
 WINDOW = timedelta(seconds=60)
@@ -22,14 +24,20 @@ def _lock_key(email: str) -> int:
 
 
 def record_booking_attempt(email: str) -> int | None:
-    now = datetime.now(timezone.utc)
-    window_start = now - WINDOW
+    email = normalize_email_identity(email)
+    if len(email) > 320 or "\u0000" in email:
+        # Keep invalid oversized identities countable without overflowing VARCHAR(320).
+        email = "invalid:" + hashlib.sha256(email.encode(errors="backslashreplace")).hexdigest()
     try:
         with SessionLocal.begin() as db:
+            lock_booking_state(db)
             db.execute(
                 text("SELECT pg_advisory_xact_lock(:lock_key)"),
                 {"lock_key": _lock_key(email)},
             )
+            # Lock waits may cross a window boundary; never timestamp before acquisition.
+            now = datetime.now(timezone.utc)
+            window_start = now - WINDOW
             db.execute(
                 delete(RateLimitAttempt).where(
                     RateLimitAttempt.email == email,

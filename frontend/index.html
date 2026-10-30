@@ -1,138 +1,74 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Find and book an appointment at Koya Clinic.">
-    <title>Koya Clinic | Find an appointment</title>
-    <link rel="stylesheet" href="/styles.css?v=redesign-1">
-  </head>
-  <body>
-    <header class="site-header">
-      <div class="shell header-inner">
-        <a class="brand" href="/" aria-label="Koya Clinic home">
-          <span class="brand-mark" aria-hidden="true">K</span>
-          <span>Koya <strong>Clinic</strong></span>
-        </a>
-        <button id="menu-toggle" class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav">
-          <span class="sr-only">Toggle navigation</span>
-          <span></span><span></span>
-        </button>
-        <nav id="primary-nav" class="primary-nav" aria-label="Primary navigation">
-          <a href="#appointments">Appointments</a>
-          <a href="#how-it-works">How it works</a>
-          <a class="nav-cta" href="#appointments">Book a visit <span aria-hidden="true">↗</span></a>
-        </nav>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Find a time and book your next visit at Koya Clinic.">
+  <title>Koya Clinic | Book a visit</title>
+  <link rel="stylesheet" href="/styles.css?v=booking-2">
+  <script src="/app.js?v=booking-2" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to booking</a>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand" href="/" aria-label="Koya Clinic home"><span class="brand-mark" aria-hidden="true"></span><span>Koya <strong>Clinic</strong></span></a>
+      <nav id="primary-nav" class="primary-nav" aria-label="Primary navigation"><a href="#appointments">Appointments</a><a href="#how-it-works">How it works</a></nav>
+    </div>
+  </header>
+  <main id="main-content" tabindex="-1">
+    <section class="page-intro shell" aria-labelledby="page-title">
+      <p class="kicker">Patient appointments</p>
+      <h1 id="page-title">A little time for your health.</h1>
+      <p class="intro-description">Choose your provider, find a time, and book your next visit.</p>
+    </section>
+    <noscript><p class="shell noscript-message">JavaScript is needed to load appointment times and book a visit. Please enable it and reload this page.</p></noscript>
+    <div id="global-message" class="global-message shell" role="alert" tabindex="-1" hidden></div>
+    <section id="appointments" class="booking-shell shell" aria-label="Appointment booking">
+      <div class="appointments-column">
+        <div class="section-heading"><div><p class="kicker">01 / Choose a time</p><h2>Appointments</h2></div><span id="slot-count" class="slot-count" aria-live="polite"></span></div>
+        <div class="browse-toolbar">
+          <label class="filter-control" for="provider-filter"><span>Provider</span><select id="provider-filter" disabled><option value="">All providers</option></select></label>
+          <p id="timezone-note" class="timezone-note">All times shown in your local time zone.</p>
+        </div>
+        <div id="slots-loading" class="slots-status" role="status"><span class="loader" aria-hidden="true"></span><span>Finding appointment times…</span></div>
+        <div id="slots-error" class="slots-status load-error" role="alert" tabindex="-1" hidden><strong>Appointments couldn’t be loaded.</strong><p id="slots-error-copy">Please try again in a moment.</p><button id="retry-slots" class="button secondary-button" type="button">Try again</button></div>
+        <div id="slots-empty" class="slots-status empty-slots" role="status" hidden><strong>No appointment times to show</strong><span>Try another provider or check back later.</span></div>
+        <div id="slots-list" class="slots-list" aria-label="Appointment times" aria-busy="true"></div>
+        <a id="continue-booking" class="continue-booking" href="#booking-form" hidden>Continue with this time <span aria-hidden="true">↓</span></a>
       </div>
-    </header>
-
-    <main>
-      <section class="page-intro shell" aria-labelledby="page-title">
-        <div class="intro-copy">
-          <p class="kicker"><span class="kicker-line"></span> Patient appointments</p>
-          <h1 id="page-title">Care that fits<br><em>your day.</em></h1>
-          <p class="intro-description">
-            Find a time that works for you and book your visit with one of our trusted healthcare providers.
-          </p>
+      <aside class="selection-column" aria-labelledby="visit-title">
+        <div class="selection-panel">
+          <p class="kicker">02 / Your details</p><h2 id="visit-title">Your visit</h2>
+          <div id="selected-slot" class="selected-slot" aria-live="polite"><span class="selection-symbol" aria-hidden="true">+</span><span>Choose a time to get started.<small>Your appointment details will appear here.</small></span></div>
+          <form id="booking-form" tabindex="-1" novalidate>
+            <p class="form-instruction">Both fields are required.</p>
+            <div class="field"><label for="patient-name">Full name</label><input id="patient-name" name="name" type="text" autocomplete="name" maxlength="200" required aria-describedby="name-error" aria-invalid="false"><span id="name-error" class="field-error"></span></div>
+            <div class="field"><label for="patient-email">Email address</label><input id="patient-email" name="email" type="email" autocomplete="email" inputmode="email" required aria-describedby="email-error" aria-invalid="false"><span id="email-error" class="field-error"></span></div>
+            <button id="submit-booking" class="button primary-button" type="submit" disabled>Confirm appointment <span aria-hidden="true">↗</span></button>
+            <p id="booking-progress" class="form-footnote" role="status" aria-live="polite">Select a time, then confirm your appointment.</p>
+          </form>
         </div>
-        <div class="intro-note" aria-label="Clinic information">
-          <span class="note-dot" aria-hidden="true"></span>
-          <span>Simple, secure booking<br><strong>Available 7 days a week</strong></span>
-        </div>
-      </section>
-
-      <div id="global-message" class="global-message shell" role="status" aria-live="polite" hidden></div>
-
-      <section id="appointments" class="booking-shell shell" aria-label="Appointment booking">
-        <div class="appointments-column">
-          <div class="section-heading">
-            <div>
-              <p class="kicker">01 <span class="kicker-line"></span> Availability</p>
-              <h2>Find your appointment</h2>
-            </div>
-            <label class="filter-control" for="provider-filter">
-              <span>Filter by provider</span>
-              <select id="provider-filter">
-                <option value="">All providers</option>
-              </select>
-            </label>
-          </div>
-
-          <div id="slots-loading" class="slots-status" role="status">
-            <span class="loader" aria-hidden="true"></span> Checking available times…
-          </div>
-          <div id="slots-empty" class="slots-status empty-slots" hidden>
-            <span class="empty-icon" aria-hidden="true">—</span>
-            <strong>No appointments found</strong>
-            <span>Try another provider or check back shortly.</span>
-          </div>
-          <div id="slots-list" class="slots-list" aria-live="polite"></div>
-        </div>
-
-        <aside class="selection-column" aria-label="Your appointment">
-          <div class="selection-panel">
-            <div class="selection-heading">
-              <p class="kicker">02 <span class="kicker-line"></span> Your visit</p>
-              <span class="secure-label"><span aria-hidden="true">✓</span> Secure</span>
-            </div>
-            <h2>Complete your booking</h2>
-            <div id="selected-slot" class="selected-slot" aria-live="polite">
-              <span class="selected-placeholder-icon" aria-hidden="true">+</span>
-              <span>Select an available time<br><small>and it will appear here</small></span>
-            </div>
-            <form id="booking-form" novalidate>
-              <div class="field">
-                <label for="patient-name">Full name <span aria-hidden="true">*</span></label>
-                <input id="patient-name" name="name" type="text" autocomplete="name" placeholder="e.g. Ada Obi" required>
-                <span id="name-error" class="field-error" role="alert"></span>
-              </div>
-              <div class="field">
-                <label for="patient-email">Email address <span aria-hidden="true">*</span></label>
-                <input id="patient-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
-                <span id="email-error" class="field-error" role="alert"></span>
-              </div>
-              <button id="submit-booking" class="button primary-button" type="submit" disabled>
-                Confirm appointment <span aria-hidden="true">↗</span>
-              </button>
-            </form>
-            <p class="form-footnote"><span aria-hidden="true">▣</span> Your information is private and only used for this booking.</p>
-          </div>
-        </aside>
-      </section>
-
-      <section id="confirmation" class="confirmation-shell shell" hidden aria-labelledby="confirmation-title">
-        <div class="confirmation-mark" aria-hidden="true">✓</div>
-        <p class="kicker">Appointment confirmed</p>
-        <h2 id="confirmation-title">You're all set, <span id="confirmation-name"></span>.</h2>
-        <p class="confirmation-copy">We've saved your visit. Keep this reference for your records.</p>
-        <dl class="confirmation-details">
-          <div><dt>Booking reference</dt><dd id="confirmation-id"></dd></div>
-          <div><dt>Provider</dt><dd id="confirmation-provider"></dd></div>
-          <div><dt>Appointment</dt><dd id="confirmation-time"></dd></div>
-          <div><dt>Status</dt><dd><span class="status-badge">Confirmed</span></dd></div>
-        </dl>
-        <button id="book-another" class="button secondary-button" type="button">Find another appointment</button>
-      </section>
-
-      <section id="how-it-works" class="how-it-works shell" aria-labelledby="how-title">
-        <div>
-          <p class="kicker">A simpler way to care</p>
-          <h2 id="how-title">From availability<br>to peace of mind.</h2>
-        </div>
-        <ol class="steps">
-          <li><span>01</span><strong>Choose a time</strong><small>Browse real-time availability from our care team.</small></li>
-          <li><span>02</span><strong>Share your details</strong><small>Tell us who you are so we can prepare for your visit.</small></li>
-          <li><span>03</span><strong>You're confirmed</strong><small>Receive your booking reference instantly.</small></li>
-        </ol>
-      </section>
-    </main>
-
-    <footer class="site-footer">
-      <div class="shell footer-inner">
-        <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">K</span><span>Koya <strong>Clinic</strong></span></a>
-        <span>Care that fits your day.</span>
-      </div>
-    </footer>
-    <script src="/app.js?v=redesign-1" defer></script>
-  </body>
+      </aside>
+    </section>
+    <section id="confirmation" class="confirmation-shell shell" hidden aria-labelledby="confirmation-title">
+      <div id="confirmation-mark" class="confirmation-mark" aria-hidden="true">✓</div><p id="confirmation-eyebrow" class="kicker">Booking received</p>
+      <h2 id="confirmation-title" tabindex="-1">Thank you, <span id="confirmation-name"></span>.</h2><p id="confirmation-copy" class="confirmation-copy">Keep this booking reference for your records.</p>
+      <dl class="confirmation-details">
+        <div><dt>Booking reference</dt><dd id="confirmation-id"></dd></div><div><dt>Status</dt><dd id="confirmation-status" class="status-badge"></dd></div>
+        <div><dt>Provider</dt><dd id="confirmation-provider"></dd></div><div><dt>Appointment · local time</dt><dd id="confirmation-time"></dd></div>
+      </dl>
+      <button id="book-another" class="button secondary-button" type="button">Find another appointment</button>
+    </section>
+    <section id="how-it-works" class="how-it-works shell" aria-labelledby="how-title">
+      <h2 id="how-title">A visit in three steps.</h2>
+      <ol class="steps">
+        <li><span aria-hidden="true">01</span><div><strong>Find your time</strong><p>Browse appointments by provider.</p></div></li>
+        <li><span aria-hidden="true">02</span><div><strong>Add your details</strong><p>Enter your name and email address.</p></div></li>
+        <li><span aria-hidden="true">03</span><div><strong>Keep your reference</strong><p>Review your booking and its status.</p></div></li>
+      </ol>
+    </section>
+  </main>
+  <footer class="site-footer"><div class="shell footer-inner"><span>Koya Clinic</span><span>A little time, well spent.</span></div></footer>
+</body>
 </html>

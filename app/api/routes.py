@@ -1,3 +1,5 @@
+import hashlib
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -5,6 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import EmailStr
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.db.models import Booking, Slot
 from app.db.session import get_db
@@ -37,7 +40,7 @@ def reset_database(payload: ResetRequest, db: DbSession) -> dict[str, str]:
 def list_slots(
     db: DbSession, provider: str | None = Query(default=None)
 ) -> SlotsResponse:
-    statement = select(Slot).order_by(Slot.start_time.asc())
+    statement = select(Slot).order_by(Slot.start_time.asc(), Slot.id.asc())
     if provider is not None:
         statement = statement.where(Slot.provider == provider)
 
@@ -79,7 +82,7 @@ async def rate_limit_booking_attempt(request: Request) -> None:
 
     normalized_email = raw_email.strip().lower()
     try:
-        retry_after = record_booking_attempt(normalized_email)
+        retry_after = await run_in_threadpool(record_booking_attempt, normalized_email)
     except RateLimitUnavailable as exc:
         raise HTTPException(
             status_code=503,
@@ -93,6 +96,18 @@ async def rate_limit_booking_attempt(request: Request) -> None:
         )
 
 
+async def booking_body_fingerprint(request: Request) -> str:
+    # Canonical JSON ignores object-key order, not changes to submitted values or extras.
+    body = await request.json()
+    try:
+        encoded = json.dumps(
+            body, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode()
+    except UnicodeEncodeError as exc:
+        raise DomainError(400, "invalid request") from exc
+    return hashlib.sha256(encoded).hexdigest()
+
+
 @router.post(
     "/bookings",
     response_model=BookingResponse,
@@ -102,11 +117,12 @@ async def rate_limit_booking_attempt(request: Request) -> None:
 def book_slot(
     payload: BookingCreate,
     db: DbSession,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    body_fingerprint: Annotated[str, Depends(booking_body_fingerprint)],
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=255, pattern=r"^[^\u0000]*$"),
 ):
     if idempotency_key is not None:
         status_code, response_body = create_idempotent_booking(
-            db, payload, idempotency_key
+            db, payload, idempotency_key, body_fingerprint
         )
         return JSONResponse(status_code=status_code, content=response_body)
     booking = create_booking(db, payload)
