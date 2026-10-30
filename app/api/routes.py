@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import EmailStr
 from sqlalchemy import select
@@ -21,6 +21,7 @@ from app.services.bookings import (
     list_bookings,
     reset_slots,
 )
+from app.services.rate_limit import RateLimitUnavailable, record_booking_attempt
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
 DbSession = Annotated[Session, Depends(get_db)]
@@ -65,7 +66,39 @@ def list_slots(
     )
 
 
-@router.post("/bookings", response_model=BookingResponse, status_code=201)
+async def rate_limit_booking_attempt(request: Request) -> None:
+    try:
+        body = await request.json()
+    except ValueError:
+        return
+    if not isinstance(body, dict):
+        return
+    raw_email = body.get("email")
+    if not isinstance(raw_email, str) or not raw_email.strip():
+        return
+
+    normalized_email = raw_email.strip().lower()
+    try:
+        retry_after = record_booking_attempt(normalized_email)
+    except RateLimitUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="rate limiter unavailable",
+        ) from exc
+    if retry_after is not None:
+        raise HTTPException(
+            status_code=429,
+            detail="too many booking attempts",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
+@router.post(
+    "/bookings",
+    response_model=BookingResponse,
+    status_code=201,
+    dependencies=[Depends(rate_limit_booking_attempt)],
+)
 def book_slot(
     payload: BookingCreate,
     db: DbSession,

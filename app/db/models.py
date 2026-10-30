@@ -60,3 +60,16 @@ class IdempotencyRecord(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
+
+
+class RateLimitAttempt(Base):
+    __tablename__ = "rate_limit_attempts"
+    __table_args__ = (
+        Index("ix_rate_limit_attempts_email_attempted_at", "email", "attempted_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    attempted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )

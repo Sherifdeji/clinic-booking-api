@@ -4,7 +4,7 @@ from threading import Barrier
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.db.models import Booking, IdempotencyRecord
+from app.db.models import Booking, IdempotencyRecord, RateLimitAttempt
 from app.db.session import SessionLocal
 from app.main import app
 
@@ -73,7 +73,7 @@ def test_idempotency_key_cannot_be_reused_with_different_body(client):
 
 def test_concurrent_identical_idempotent_requests_replay_one_result(client):
     reset(client, [slot("same-key", 13)])
-    barrier = Barrier(6)
+    barrier = Barrier(5)
 
     def attempt(_):
         with TestClient(app, headers={"X-API-Key": "test-key"}) as concurrent:
@@ -84,8 +84,8 @@ def test_concurrent_identical_idempotent_requests_replay_one_result(client):
                 json=booking_payload("same-key"),
             )
 
-    with ThreadPoolExecutor(max_workers=6) as executor:
-        responses = list(executor.map(attempt, range(6)))
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        responses = list(executor.map(attempt, range(5)))
 
     assert all(response.status_code == 201 for response in responses)
     assert len({response.json()["id"] for response in responses}) == 1
@@ -135,6 +135,9 @@ def test_booking_history_uses_cursor_pagination_and_includes_cancelled(client):
         )
         assert response.status_code == 201
         booking_ids.append(response.json()["id"])
+        with SessionLocal() as db:
+            db.query(RateLimitAttempt).delete()
+            db.commit()
 
     cancelled = client.delete(f"/bookings/{booking_ids[3]}")
     assert cancelled.status_code == 200

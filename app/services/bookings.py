@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.models import Booking, IdempotencyRecord, Slot
+from app.db.models import Booking, IdempotencyRecord, RateLimitAttempt, Slot
 from app.schemas.bookings import BookingCreate
 from app.schemas.slots import SlotInput
 
@@ -26,6 +26,7 @@ def reset_slots(db: Session, slots: list[SlotInput]) -> None:
         with db.begin():
             db.execute(delete(Booking))
             db.execute(delete(IdempotencyRecord))
+            db.execute(delete(RateLimitAttempt))
             db.execute(delete(Slot))
             db.add_all(
                 [
