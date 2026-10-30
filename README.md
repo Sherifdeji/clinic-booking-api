@@ -1,8 +1,9 @@
 # Koya Clinic Booking API
 
-This repository contains the Level 2 implementation of the Koya clinic booking
+This repository contains the Level 4 implementation of the Koya clinic booking
 assessment. It implements reset, slot listing, booking, booking retrieval,
-API-key authentication, and Level 2 booking validation.
+API-key authentication, booking validation, race-safe booking, cancellation,
+idempotent booking requests, and cursor-paginated booking history.
 
 ## Local setup
 
@@ -43,8 +44,35 @@ curl http://127.0.0.1:8000/bookings/<booking-id> \
 
 The reset response is `{"message":"reset successful"}` because the supplied
 contract specifies only HTTP 200 and no success body. All contract endpoints
-require `X-API-Key`. Level 2 performs a basic availability check; database-level
-race protection is intentionally deferred to Level 3.
+require `X-API-Key`. Booking uses a PostgreSQL row lock plus a partial unique
+index so only one confirmed booking can exist for a slot. Cancellation marks
+the booking as `cancelled` and releases the slot for rebooking.
+
+Cancel a booking with:
+
+```bash
+curl -X DELETE http://127.0.0.1:8000/bookings/<booking-id> \
+  -H 'X-API-Key: choose-a-local-api-key'
+```
+
+The cancellation response contains the original booking with
+`"status":"cancelled"`. Level 5 rate limiting, frontend integration, and
+deployment are intentionally not implemented yet.
+
+An idempotent booking can be submitted with:
+
+```bash
+curl -X POST http://127.0.0.1:8000/bookings \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-Key: choose-a-local-api-key' \
+  -H 'Idempotency-Key: booking-key-1' \
+  -d '{"slot_id":"s1","name":"Ada Obi","email":"ada@example.com"}'
+```
+
+Repeating the request with the same key and body replays the original response.
+Reusing the key with a different body returns HTTP 422. Booking history is
+available at `/bookings?email=ada@example.com&limit=10`; pass its opaque
+`next_cursor` value as `cursor` for the next page.
 
 Run the tests with:
 

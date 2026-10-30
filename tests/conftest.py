@@ -1,7 +1,13 @@
+import os
 import subprocess
 
 import pytest
 from fastapi.testclient import TestClient
+
+os.environ["DATABASE_URL"] = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+psycopg://postgres@localhost:5432/koya_clinic_test",
+)
 
 from app.main import app
 
@@ -34,3 +40,8 @@ def future_slots() -> list[dict[str, str]]:
             "end": "2099-12-09T09:30:00Z",
         },
     ]
+
+
+@pytest.fixture
+def api_key() -> str:
+    return "test-key"

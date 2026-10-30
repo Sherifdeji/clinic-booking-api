@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String
+from sqlalchemy import DateTime, ForeignKey, Index, JSON, String, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -27,6 +27,13 @@ class Booking(Base):
     __tablename__ = "bookings"
     __table_args__ = (
         Index("ix_bookings_slot_status", "slot_id", "status"),
+        Index("ix_bookings_email_created_at_id", "email", "created_at", "id"),
+        Index(
+            "uq_bookings_one_confirmed_per_slot",
+            "slot_id",
+            unique=True,
+            postgresql_where=text("status = 'confirmed'"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -41,3 +48,15 @@ class Booking(Base):
     )
 
     slot: Mapped[Slot] = relationship(back_populates="bookings")
+
+
+class IdempotencyRecord(Base):
+    __tablename__ = "idempotency_records"
+
+    key: Mapped[str] = mapped_column(String(255), primary_key=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    response_status: Mapped[int] = mapped_column(nullable=False)
+    response_body: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
